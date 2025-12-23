@@ -50,29 +50,17 @@ def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
 
 def find_latest_status_column(df: pd.DataFrame) -> int:
     """
-    Find the latest usable Status column.
-    Works with merged week headers & CSV export.
+    FINAL & CORRECT LOGIC:
+    Latest week = rightmost Status column.
+    Works with merged headers & CSV export.
     """
 
-    status_cols = []
-
-    for col in range(df.shape[1]):
-        # Scan top 15 rows for 'Status'
-        header_scan = df.iloc[:15, col].astype(str).str.lower()
-        if header_scan.str.contains("^status$", regex=True).any():
-            status_cols.append(col)
-
-    if not status_cols:
-        raise ValueError("No Status column found")
-
-    # Choose the rightmost Status column that has ANY data below header
-    for col in reversed(status_cols):
-        data_below = df.iloc[15:, col].astype(str).str.strip()
-        if data_below.replace("", pd.NA).dropna().shape[0] > 0:
+    for col in range(df.shape[1] - 1, -1, -1):
+        header_scan = df.iloc[:15, col].astype(str).str.strip().str.lower()
+        if header_scan.eq("status").any():
             return col
 
-    # Fallback: last Status column
-    return max(status_cols)
+    raise ValueError("No Status column found")
 
 
 
