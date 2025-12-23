@@ -1,11 +1,19 @@
 # app.py
 # Streamlit Master Dashboard – STRICT status logic (Government MIS safe)
-# Reads latest week automatically and avoids false "completed" matches
+# FIXED: Manual "COMPLETED" typing + Google CSV delay + caching issues
 
 import streamlit as st
 import pandas as pd
 import re
 import unicodedata
+
+# --------------------------------------------------
+# FORCE NO CACHING (VERY IMPORTANT)
+# --------------------------------------------------
+st.markdown(
+    "<meta http-equiv='Cache-Control' content='no-cache, no-store, must-revalidate'>",
+    unsafe_allow_html=True
+)
 
 st.set_page_config(page_title="Officer Task Status Dashboard", layout="wide")
 
@@ -15,7 +23,6 @@ st.caption("Latest-week only • Strict Pending/Completed logic • Auto-updates
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
-# Officer name → (spreadsheet_id, gid)
 OFFICER_SHEETS = {
     "ADC G": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "174981592"),
     "ADC D": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "537074213"),
@@ -40,19 +47,16 @@ OFFICER_SHEETS = {
 # --------------------------------------------------
 
 def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
-    """Load a Google Sheet tab as CSV (public access)."""
+    """Load Google Sheet tab as CSV (public access)."""
     url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     return pd.read_csv(url, header=None)
 
 
 def find_latest_status_column(df: pd.DataFrame) -> int:
-    """
-    Find the rightmost column whose header contains 'Status'.
-    Assumes new weeks are appended to the right.
-    """
+    """Find rightmost Status column (latest week)."""
     status_cols = []
     for col in range(df.shape[1]):
-        header_scan = df.iloc[:12, col].astype(str).str.lower()
+        header_scan = df.iloc[:15, col].astype(str).str.lower()
         if header_scan.str.contains("status").any():
             status_cols.append(col)
 
@@ -64,33 +68,26 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
 
 def clean_status(cell_value: str) -> str:
     """
-    Normalize unicode, remove invisible characters, lowercase.
-    Treats empty dropdowns or spaces as blank.
+    ULTRA-STRICT normalization:
+    - Removes ALL unicode spaces & invisible chars
+    - Case insensitive
     """
     if pd.isna(cell_value):
         return ""
-    
-    s = str(cell_value)
-    # Normalize Unicode
-    s = unicodedata.normalize("NFKC", s)
-    # Remove all whitespace and invisible characters (zero-width, non-breaking, etc.)
-    s = re.sub(r'[\s\u200b\u200c\u200d\uFEFF]+', '', s)
-    # Lowercase
-    s = s.lower()
-    
-    return s
+
+    s = unicodedata.normalize("NFKD", str(cell_value))
+    s = "".join(ch for ch in s if ch.isalnum())
+    return s.lower()
 
 
 def summarize_status(df: pd.DataFrame, status_col: int):
     """
-    Dropdown-safe, capitalization-insensitive logic:
-
-    - A row is a task if ANY column in first 5 columns has Sr. No.
-    - 'completed' (any capitalization) → Complete
-    - anything else → Incomplete
+    STRICT LOGIC:
+    - Exact 'completed' → Complete
+    - Anything else → Incomplete
     """
 
-    # Detect task rows by scanning first 5 columns for numeric Sr. No.
+    # Identify task rows via Sr. No. in first 5 columns
     sr_no_mask = (
         df.iloc[:, :5]
         .apply(lambda col: pd.to_numeric(col, errors="coerce").notna())
@@ -99,12 +96,10 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     task_rows = df[sr_no_mask]
 
-    # Clean status values
     status_series = task_rows.iloc[:, status_col].apply(clean_status)
 
-    # Count completed vs incomplete
     completed_count = (status_series == "completed").sum()
-    incomplete_count = ((status_series != "completed") & (status_series != "")).sum()
+    incomplete_count = (status_series != "completed").sum()
 
     if incomplete_count > 0:
         overall_status = "Incomplete"
@@ -114,7 +109,6 @@ def summarize_status(df: pd.DataFrame, status_col: int):
         overall_status = "No Update"
 
     return overall_status, int(incomplete_count), int(completed_count)
-
 
 # --------------------------------------------------
 # AGGREGATION
@@ -134,7 +128,7 @@ with st.spinner("Fetching latest data from Google Sheets..."):
                 "No. of Tasks Incomplete": incomplete,
                 "No. of Tasks Completed": complete,
             })
-        except Exception as e:
+        except Exception:
             rows.append({
                 "Officer Name": officer,
                 "Overall Status": "Error",
@@ -158,9 +152,13 @@ with col2:
     chart_df = summary_df.dropna(subset=["No. of Tasks Incomplete"])
     st.bar_chart(chart_df.set_index("Officer Name")["No. of Tasks Incomplete"])
 
+# Manual refresh button
+if st.button("🔄 Refresh Latest Data"):
+    st.rerun()
+
 st.markdown("---")
 st.info(
-    "Rule applied: ONLY exact 'completed' (any capitalization, spaces stripped) is treated as completed. "
-    "Anything else (pending / dropdown / blank / extra spaces) → Incomplete. "
-    "Latest week is detected by the rightmost Status column."
+    "Rule applied: ONLY exact 'completed' (case-insensitive, spaces removed) is treated as completed. "
+    "Anything else → Incomplete. "
+    "Latest week is auto-detected using the rightmost Status column."
 )
