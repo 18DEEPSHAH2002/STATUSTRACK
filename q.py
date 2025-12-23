@@ -52,22 +52,20 @@ def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
 
 def find_latest_status_column(df: pd.DataFrame) -> int:
     """
-    Find the rightmost column that actually contains
-    'pending' or 'completed' values.
+    FINAL CORRECT LOGIC:
+    - Status is written in ROW 2 (index 1)
+    - Latest week = rightmost 'Status' in that row
     """
 
-    for col in range(df.shape[1] - 1, -1, -1):
-        col_values = (
-            df.iloc[:, col]
-            .astype(str)
-            .str.lower()
-            .str.strip()
-        )
+    header_row = 1  # Row 2 in Google Sheet
 
-        if col_values.str.contains("pending|completed").any():
+    for col in range(df.shape[1] - 1, -1, -1):
+        cell = str(df.iloc[header_row, col]).strip().lower()
+        if cell == "status":
             return col
 
-    raise ValueError("No Status column with pending/completed found")
+    raise ValueError("Status column not found in row 2")
+
 
 
 def summarize_status(df: pd.DataFrame, status_col: int):
