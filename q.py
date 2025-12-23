@@ -75,21 +75,15 @@ def clean_status(value: str) -> str:
 
 
 def summarize_status(df: pd.DataFrame, status_col: int):
-    """
-    Rules:
-    - completed → Completed count
-    - pending → Pending count
-    - blank / anything else → ignored
-    """
 
-    # Task description column (Weekly Target)
-    task_col_index = 1  
+    task_col_index = 1  # Weekly Target column
 
+    task_col = df.iloc[:, task_col_index].astype(str).str.strip()
+
+    # ✅ Ignore empty rows AND summary rows like "Done/Total"
     task_mask = (
-        df.iloc[:, task_col_index]
-        .astype(str)
-        .str.strip()
-        .ne("")
+        task_col.ne("") &
+        (~task_col.str.lower().isin(["done/total"]))
     )
 
     task_rows = df[task_mask]
@@ -101,7 +95,7 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     if pending_count > 0:
         overall_status = "Pending"
-    elif pending_count == 0 and completed_count > 0:
+    elif completed_count > 0:
         overall_status = "Completed"
     else:
         overall_status = "No Update"
