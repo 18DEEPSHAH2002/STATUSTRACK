@@ -1,5 +1,6 @@
 # app.py
-# Officer Task Status Dashboard – Pending vs Completed (STRICT)
+# Officer Task Status Dashboard – FINAL STABLE VERSION
+# Logic: LAST COLUMN is always the latest week Status
 
 import streamlit as st
 import pandas as pd
@@ -16,7 +17,7 @@ st.markdown(
 st.set_page_config(page_title="Officer Task Status Dashboard", layout="wide")
 
 st.title("📊 Master Dashboard – Officer Weekly Task Status")
-st.caption("Latest-week only • Pending / Completed counted • Blank ignored")
+st.caption("Latest week only • Pending / Completed counted • Blank ignored")
 
 # --------------------------------------------------
 # CONFIGURATION
@@ -48,31 +49,33 @@ def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
     url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     return pd.read_csv(url, header=None)
 
+
 def find_latest_status_column(df: pd.DataFrame) -> int:
     """
-    FINAL & CORRECT LOGIC:
-    Latest week = rightmost Status column.
-    Works with merged headers & CSV export.
+    FINAL LOGIC:
+    Latest Status = LAST column of the sheet
     """
+    return df.shape[1] - 1
 
-    for col in range(df.shape[1] - 1, -1, -1):
-        header_scan = df.iloc[:15, col].astype(str).str.strip().str.lower()
-        if header_scan.eq("status").any():
-            return col
 
-    raise ValueError("No Status column found")
+def clean_status(value: str) -> str:
+    if pd.isna(value):
+        return ""
 
+    s = unicodedata.normalize("NFKD", str(value))
+    s = "".join(ch for ch in s if ch.isalnum())
+    return s.lower()
 
 
 def summarize_status(df: pd.DataFrame, status_col: int):
     """
-    LOGIC:
-    - completed → Completed count
-    - pending → Pending count
+    Rules:
+    - completed → count as Completed
+    - pending → count as Pending
     - blank / anything else → ignored
     """
 
-    # Detect task rows via Sr. No.
+    # Identify task rows via Sr. No. in first 5 columns
     sr_no_mask = (
         df.iloc[:, :5]
         .apply(lambda col: pd.to_numeric(col, errors="coerce").notna())
@@ -141,6 +144,6 @@ if st.button("🔄 Refresh Latest Data"):
 
 st.markdown("---")
 st.info(
-    "Rules: 'COMPLETED' → Completed | 'PENDING' → Pending | Blank or anything else → Ignored. "
-    "Latest week detected automatically."
+    "Rules applied: 'COMPLETED' → Completed | 'PENDING' → Pending | Blank ignored. "
+    "Latest week is always read from the LAST column."
 )
