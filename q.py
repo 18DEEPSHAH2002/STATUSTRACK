@@ -62,10 +62,17 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
 
 def summarize_status(df: pd.DataFrame, status_col: int):
     """
-    STRICT LOGIC:
-    - Completed ONLY if cell == 'completed'
-    - Anything else (pending / incomplete / not completed / blank) = Incomplete
+    UPDATED LOGIC (as requested):
+    - 'completed'      → Completed
+    - 'pending'        → Incomplete
+    - blank / empty    → SKIPPED (not counted)
+    - anything else    → Skipped
+    Overall status:
+    - If any pending exists → Incomplete
+    - Else if completed exists → Complete
+    - Else → No Update
     """
+
     status_series = (
         df.iloc[12:, status_col]
         .astype(str)
@@ -74,12 +81,18 @@ def summarize_status(df: pd.DataFrame, status_col: int):
     )
 
     completed_mask = status_series.eq("completed")
-    incomplete_mask = ~completed_mask
+    pending_mask = status_series.eq("pending")
+    blank_mask = status_series.eq("") | status_series.eq("nan")
 
-    incomplete_count = int(incomplete_mask.sum())
     complete_count = int(completed_mask.sum())
+    incomplete_count = int(pending_mask.sum())
 
-    overall_status = "Incomplete" if incomplete_count > 0 else "Complete"
+    if incomplete_count > 0:
+        overall_status = "Incomplete"
+    elif complete_count > 0:
+        overall_status = "Complete"
+    else:
+        overall_status = "No Update"
 
     return overall_status, incomplete_count, complete_count
 
