@@ -62,39 +62,36 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
 
 def summarize_status(df: pd.DataFrame, status_col: int):
     """
-    UPDATED LOGIC (as requested):
-    - 'completed'      → Completed
-    - 'pending'        → Incomplete
-    - blank / empty    → SKIPPED (not counted)
-    - anything else    → Skipped
-    Overall status:
-    - If any pending exists → Incomplete
-    - Else if completed exists → Complete
-    - Else → No Update
+    FINAL VERIFIED LOGIC (Based on your sheet structure):
+
+    - A row is counted ONLY if 'Sr. No.' (column 0) is present
+    - completed → Completed
+    - pending → Incomplete
+    - blank → skipped
     """
 
+    # ✅ Keep ONLY rows where Sr. No. exists (real tasks)
+    task_rows = df[pd.to_numeric(df.iloc[:, 0], errors="coerce").notna()]
+
     status_series = (
-        df.iloc[12:, status_col]
+        task_rows.iloc[:, status_col]
         .astype(str)
         .str.strip()
         .str.lower()
     )
 
-    completed_mask = status_series.eq("completed")
-    pending_mask = status_series.eq("pending")
-    blank_mask = status_series.eq("") | status_series.eq("nan")
+    completed_count = (status_series == "completed").sum()
+    pending_count = (status_series == "pending").sum()
 
-    complete_count = int(completed_mask.sum())
-    incomplete_count = int(pending_mask.sum())
-
-    if incomplete_count > 0:
+    if pending_count > 0:
         overall_status = "Incomplete"
-    elif complete_count > 0:
+    elif completed_count > 0:
         overall_status = "Complete"
     else:
         overall_status = "No Update"
 
-    return overall_status, incomplete_count, complete_count
+    return overall_status, int(pending_count), int(completed_count)
+
 
 # --------------------------------------------------
 # AGGREGATION
