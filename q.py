@@ -5,6 +5,7 @@
 import streamlit as st
 import pandas as pd
 import re
+import unicodedata
 
 st.set_page_config(page_title="Officer Task Status Dashboard", layout="wide")
 
@@ -63,13 +64,17 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
 
 def clean_status(cell_value: str) -> str:
     """
-    Remove all invisible characters (spaces, non-breaking, zero-width) and lowercase.
+    Normalize unicode, remove invisible characters and lowercase.
+    Handles dropdowns with hidden/non-breaking spaces.
     """
     if pd.isna(cell_value):
         return ""
-    # Remove all whitespace characters
-    cleaned = re.sub(r'\s+', '', str(cell_value))
-    return cleaned.lower()
+    s = str(cell_value)
+    # Normalize unicode (convert non-breaking spaces, etc.)
+    s = unicodedata.normalize("NFKD", s)
+    # Remove all whitespace characters (spaces, tabs, zero-width, etc.)
+    s = re.sub(r'\s+', '', s)
+    return s.lower()
 
 
 def summarize_status(df: pd.DataFrame, status_col: int):
@@ -78,7 +83,7 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     - A row is a task if ANY column in first 5 columns has Sr. No.
     - completed → Completed
-    - anything else (pending, dropdown values, blank) → Incomplete
+    - anything else (pending, dropdown, blank) → Incomplete
     """
 
     # 🔍 Detect task rows by scanning first 5 columns for Sr. No.
@@ -90,7 +95,7 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     task_rows = df[sr_no_mask]
 
-    # Clean status values
+    # Clean status values (handles dropdowns)
     status_series = task_rows.iloc[:, status_col].apply(clean_status)
 
     # Count completed vs incomplete
