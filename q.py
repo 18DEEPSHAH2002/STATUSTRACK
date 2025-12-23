@@ -1,26 +1,19 @@
 # app.py
-# Officer Task Status Dashboard – FINAL STABLE VERSION
-# Status header is in ROW 2, tasks detected via Task column
+# Streamlit Master Dashboard – FINAL GOVERNMENT SAFE VERSION
+# Always reads LATEST WEEK (last column only)
 
 import streamlit as st
 import pandas as pd
+import re
 import unicodedata
-
-# --------------------------------------------------
-# FORCE NO CACHING
-# --------------------------------------------------
-st.markdown(
-    "<meta http-equiv='Cache-Control' content='no-cache, no-store, must-revalidate'>",
-    unsafe_allow_html=True
-)
 
 st.set_page_config(page_title="Officer Task Status Dashboard", layout="wide")
 
 st.title("📊 Master Dashboard – Officer Weekly Task Status")
-st.caption("Latest week only • Pending / Completed counted • Blank ignored")
+st.caption("Latest week only • Pending / Completed counted correctly")
 
 # --------------------------------------------------
-# CONFIGURATION
+# CONFIG
 # --------------------------------------------------
 OFFICER_SHEETS = {
     "ADC G": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "174981592"),
@@ -33,57 +26,39 @@ OFFICER_SHEETS = {
     "SDM East": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "33416154"),
     "SDM West": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "52989510"),
     "SDM Raikot": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "1833732603"),
-    "SDM Samrala": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "190794459"),
-    "SDM Khanna": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "2054147547"),
-    "SDM Jagraon": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "278920499"),
-    "SDM Payal": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "778489712"),
-    "DRO": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "501565659"),
-    "RTA": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "1563439729"),
 }
 
 # --------------------------------------------------
 # HELPERS
 # --------------------------------------------------
-
-def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
+def load_sheet_csv(spreadsheet_id, gid):
     url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     return pd.read_csv(url, header=None)
 
 
-def find_latest_status_column(df: pd.DataFrame) -> int:
-    """
-    Status header is in ROW 2 (index 1).
-    Latest week = rightmost column where row 2 == 'Status'
-    """
-    header_row = 1  # Row 2 in Google Sheet
-
-    for col in range(df.shape[1] - 1, -1, -1):
-        cell = str(df.iloc[header_row, col]).strip().lower()
-        if cell == "status":
-            return col
-
-    raise ValueError("Status column not found in row 2")
-
-
-def clean_status(value: str) -> str:
+def clean_status(value):
     if pd.isna(value):
         return ""
 
-    s = unicodedata.normalize("NFKD", str(value))
-    s = "".join(ch for ch in s if ch.isalnum())
+    s = str(value)
+    s = unicodedata.normalize("NFKC", s)
+    s = re.sub(r'[\s\u200b\u200c\u200d\uFEFF]+', '', s)
     return s.lower()
 
 
-def summarize_status(df: pd.DataFrame, status_col: int):
+def summarize_status(df):
+    # ✅ LATEST WEEK STATUS = LAST COLUMN
+    status_col = df.shape[1] - 1
 
-    task_col_index = 1  # Weekly Target column
+    # Weekly Target column (contains real task text)
+    task_col_index = 1
 
-    task_col = df.iloc[:, task_col_index].astype(str).str.strip()
+    task_text = df.iloc[:, task_col_index].astype(str).str.strip()
 
-    # ✅ Ignore empty rows AND summary rows like "Done/Total"
+    # ✅ Ignore empty rows & Done/Total summary
     task_mask = (
-        task_col.ne("") &
-        (~task_col.str.lower().isin(["done/total"]))
+        task_text.ne("") &
+        (~task_text.str.lower().isin(["done/total"]))
     )
 
     task_rows = df[task_mask]
@@ -102,17 +77,17 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     return overall_status, int(pending_count), int(completed_count)
 
+
 # --------------------------------------------------
 # AGGREGATION
 # --------------------------------------------------
 rows = []
 
-with st.spinner("Fetching latest data from Google Sheets..."):
+with st.spinner("Fetching latest week data..."):
     for officer, (sid, gid) in OFFICER_SHEETS.items():
         try:
             df = load_sheet_csv(sid, gid)
-            status_col = find_latest_status_column(df)
-            overall, pending, completed = summarize_status(df, status_col)
+            overall, pending, completed = summarize_status(df)
 
             rows.append({
                 "Officer Name": officer,
@@ -131,7 +106,7 @@ with st.spinner("Fetching latest data from Google Sheets..."):
 summary_df = pd.DataFrame(rows)
 
 # --------------------------------------------------
-# DASHBOARD UI
+# UI
 # --------------------------------------------------
 col1, col2 = st.columns([2, 1])
 
@@ -140,15 +115,15 @@ with col1:
     st.dataframe(summary_df, use_container_width=True)
 
 with col2:
-    st.subheader("📈 Pending Tasks by Officer")
+    st.subheader("📊 Pending Tasks by Officer")
     chart_df = summary_df.dropna(subset=["No. of Tasks Pending"])
     st.bar_chart(chart_df.set_index("Officer Name")["No. of Tasks Pending"])
 
-if st.button("🔄 Refresh Latest Data"):
-    st.rerun()
-
 st.markdown("---")
 st.info(
-    "Rules applied: 'COMPLETED' → Completed | 'PENDING' → Pending | Blank ignored. "
-    "Latest week detected using the rightmost 'Status' in Row 2."
+    "Logic applied:\n"
+    "• ONLY last column is treated as Status (latest week)\n"
+    "• Pending & Completed counted strictly\n"
+    "• Blank cells ignored\n"
+    "• Done/Total rows ignored"
 )
