@@ -163,4 +163,4 @@ st.info(
     "Rule applied: ONLY exact 'completed' is treated as completed. "
     "Anything else (pending / dropdown / blank) → Incomplete. "
     "Latest week is detected by the rightmost Status column."
-)
+) 
