@@ -64,26 +64,30 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
 
 def clean_status(cell_value: str) -> str:
     """
-    Normalize unicode, remove invisible characters and lowercase.
-    Handles dropdowns with hidden/non-breaking spaces.
+    Normalize unicode, remove invisible characters, lowercase.
+    Treats empty dropdowns as blank.
     """
     if pd.isna(cell_value):
         return ""
+    
     s = str(cell_value)
-    # Normalize unicode (convert non-breaking spaces, etc.)
-    s = unicodedata.normalize("NFKD", s)
-    # Remove all whitespace characters (spaces, tabs, zero-width, etc.)
-    s = re.sub(r'\s+', '', s)
-    return s.lower()
+    # Normalize Unicode
+    s = unicodedata.normalize("NFKC", s)
+    # Remove all whitespace and invisible characters (including zero-width)
+    s = re.sub(r'[\s\u200b\u200c\u200d\uFEFF]+', '', s)
+    # Lowercase for comparison
+    s = s.lower()
+    
+    return s
 
 
 def summarize_status(df: pd.DataFrame, status_col: int):
     """
-    FINAL VERIFIED LOGIC (CMFO-safe):
+    FINAL VERIFIED LOGIC (Dropdown-safe):
 
     - A row is a task if ANY column in first 5 columns has Sr. No.
     - completed → Completed
-    - anything else (pending, dropdown, blank) → Incomplete
+    - anything else (pending, dropdown blank, etc.) → Incomplete
     """
 
     # 🔍 Detect task rows by scanning first 5 columns for Sr. No.
