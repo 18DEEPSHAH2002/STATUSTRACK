@@ -65,7 +65,7 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
 def clean_status(cell_value: str) -> str:
     """
     Normalize unicode, remove invisible characters, lowercase.
-    Treats empty dropdowns as blank.
+    Treats empty dropdowns or spaces as blank.
     """
     if pd.isna(cell_value):
         return ""
@@ -73,9 +73,9 @@ def clean_status(cell_value: str) -> str:
     s = str(cell_value)
     # Normalize Unicode
     s = unicodedata.normalize("NFKC", s)
-    # Remove all whitespace and invisible characters (including zero-width)
+    # Remove all whitespace and invisible characters (zero-width, non-breaking, etc.)
     s = re.sub(r'[\s\u200b\u200c\u200d\uFEFF]+', '', s)
-    # Lowercase for comparison
+    # Lowercase
     s = s.lower()
     
     return s
@@ -83,14 +83,14 @@ def clean_status(cell_value: str) -> str:
 
 def summarize_status(df: pd.DataFrame, status_col: int):
     """
-    FINAL VERIFIED LOGIC (Dropdown-safe):
+    Dropdown-safe, capitalization-insensitive logic:
 
     - A row is a task if ANY column in first 5 columns has Sr. No.
-    - completed → Completed
-    - anything else (pending, dropdown blank, etc.) → Incomplete
+    - 'completed' (any capitalization) → Complete
+    - anything else → Incomplete
     """
 
-    # 🔍 Detect task rows by scanning first 5 columns for Sr. No.
+    # Detect task rows by scanning first 5 columns for numeric Sr. No.
     sr_no_mask = (
         df.iloc[:, :5]
         .apply(lambda col: pd.to_numeric(col, errors="coerce").notna())
@@ -99,7 +99,7 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     task_rows = df[sr_no_mask]
 
-    # Clean status values (handles dropdowns)
+    # Clean status values
     status_series = task_rows.iloc[:, status_col].apply(clean_status)
 
     # Count completed vs incomplete
@@ -160,7 +160,7 @@ with col2:
 
 st.markdown("---")
 st.info(
-    "Rule applied: ONLY exact 'completed' is treated as completed. "
-    "Anything else (pending / dropdown / blank) → Incomplete. "
+    "Rule applied: ONLY exact 'completed' (any capitalization, spaces stripped) is treated as completed. "
+    "Anything else (pending / dropdown / blank / extra spaces) → Incomplete. "
     "Latest week is detected by the rightmost Status column."
-) 
+)
