@@ -52,19 +52,22 @@ def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
 
 def find_latest_status_column(df: pd.DataFrame) -> int:
     """
-    FINAL LOGIC:
-    Latest Status = LAST column of the sheet
+    Find the rightmost column that actually contains
+    'pending' or 'completed' values.
     """
-    return df.shape[1] - 1
 
+    for col in range(df.shape[1] - 1, -1, -1):
+        col_values = (
+            df.iloc[:, col]
+            .astype(str)
+            .str.lower()
+            .str.strip()
+        )
 
-def clean_status(value: str) -> str:
-    if pd.isna(value):
-        return ""
+        if col_values.str.contains("pending|completed").any():
+            return col
 
-    s = unicodedata.normalize("NFKD", str(value))
-    s = "".join(ch for ch in s if ch.isalnum())
-    return s.lower()
+    raise ValueError("No Status column with pending/completed found")
 
 
 def summarize_status(df: pd.DataFrame, status_col: int):
