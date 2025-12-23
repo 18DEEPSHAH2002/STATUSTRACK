@@ -1,6 +1,6 @@
 # app.py
 # Officer Task Status Dashboard – FINAL STABLE VERSION
-# Logic: LAST COLUMN is always the latest week Status
+# Status header is in ROW 2, tasks detected via Task column
 
 import streamlit as st
 import pandas as pd
@@ -52,11 +52,9 @@ def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
 
 def find_latest_status_column(df: pd.DataFrame) -> int:
     """
-    FINAL CORRECT LOGIC:
-    - Status is written in ROW 2 (index 1)
-    - Latest week = rightmost 'Status' in that row
+    Status header is in ROW 2 (index 1).
+    Latest week = rightmost column where row 2 == 'Status'
     """
-
     header_row = 1  # Row 2 in Google Sheet
 
     for col in range(df.shape[1] - 1, -1, -1):
@@ -67,23 +65,35 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
     raise ValueError("Status column not found in row 2")
 
 
+def clean_status(value: str) -> str:
+    if pd.isna(value):
+        return ""
+
+    s = unicodedata.normalize("NFKD", str(value))
+    s = "".join(ch for ch in s if ch.isalnum())
+    return s.lower()
+
 
 def summarize_status(df: pd.DataFrame, status_col: int):
     """
     Rules:
-    - completed → count as Completed
-    - pending → count as Pending
+    - completed → Completed count
+    - pending → Pending count
     - blank / anything else → ignored
     """
 
-    # Identify task rows via Sr. No. in first 5 columns
-    sr_no_mask = (
-        df.iloc[:, :5]
-        .apply(lambda col: pd.to_numeric(col, errors="coerce").notna())
-        .any(axis=1)
+    # Task description column (Weekly Target)
+    task_col_index = 1  
+
+    task_mask = (
+        df.iloc[:, task_col_index]
+        .astype(str)
+        .str.strip()
+        .ne("")
     )
 
-    task_rows = df[sr_no_mask]
+    task_rows = df[task_mask]
+
     status_series = task_rows.iloc[:, status_col].apply(clean_status)
 
     completed_count = (status_series == "completed").sum()
@@ -91,7 +101,7 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     if pending_count > 0:
         overall_status = "Pending"
-    elif completed_count > 0:
+    elif pending_count == 0 and completed_count > 0:
         overall_status = "Completed"
     else:
         overall_status = "No Update"
@@ -116,7 +126,7 @@ with st.spinner("Fetching latest data from Google Sheets..."):
                 "No. of Tasks Pending": pending,
                 "No. of Tasks Completed": completed,
             })
-        except Exception:
+        except Exception as e:
             rows.append({
                 "Officer Name": officer,
                 "Overall Status": "Error",
@@ -146,5 +156,5 @@ if st.button("🔄 Refresh Latest Data"):
 st.markdown("---")
 st.info(
     "Rules applied: 'COMPLETED' → Completed | 'PENDING' → Pending | Blank ignored. "
-    "Latest week is always read from the LAST column."
+    "Latest week detected using the rightmost 'Status' in Row 2."
 )
