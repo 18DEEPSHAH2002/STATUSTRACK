@@ -1,20 +1,19 @@
 # app.py
-# Streamlit Master Dashboard to aggregate weekly task status from multiple Google Sheets
+# Streamlit Master Dashboard – STRICT status logic (Government MIS safe)
+# Reads latest week automatically and avoids false "completed" matches
 
 import streamlit as st
 import pandas as pd
-import re
-from datetime import datetime
 
 st.set_page_config(page_title="Officer Task Status Dashboard", layout="wide")
 
 st.title("📊 Master Dashboard – Officer Weekly Task Status")
-st.caption("Automatically reads the latest week column from each Google Sheet and summarizes task completion.")
+st.caption("Latest-week only • Strict Pending/Completed logic • Auto-updates weekly")
 
 # --------------------------------------------------
 # CONFIGURATION
 # --------------------------------------------------
-# Map officer name to (spreadsheet_id, gid)
+# Officer name → (spreadsheet_id, gid)
 OFFICER_SHEETS = {
     "ADC G": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "174981592"),
     "ADC D": ("1jspebqSTXgEtYyxYAE47_uRn6RQKFlHQhneuQoGiCok", "537074213"),
@@ -39,43 +38,53 @@ OFFICER_SHEETS = {
 # --------------------------------------------------
 
 def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
-    """Load a Google Sheet tab as CSV using public access."""
+    """Load a Google Sheet tab as CSV (public access)."""
     url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     return pd.read_csv(url, header=None)
 
 
 def find_latest_status_column(df: pd.DataFrame) -> int:
     """
-    Find the column index of the latest 'Status' by scanning header rows.
+    Find the rightmost column whose header contains 'Status'.
     Assumes new weeks are appended to the right.
     """
     status_cols = []
     for col in range(df.shape[1]):
-        col_values = df.iloc[:10, col].astype(str).str.lower()
-        if col_values.str.contains("status").any():
+        header_scan = df.iloc[:12, col].astype(str).str.lower()
+        if header_scan.str.contains("status").any():
             status_cols.append(col)
+
     if not status_cols:
         raise ValueError("No Status column found")
+
     return max(status_cols)
 
 
 def summarize_status(df: pd.DataFrame, status_col: int):
-    """Count completed vs incomplete tasks from a Status column."""
-    status_series = df.iloc[10:, status_col].astype(str).str.lower()
+    """
+    STRICT LOGIC:
+    - Completed ONLY if cell == 'completed'
+    - Anything else (pending / incomplete / not completed / blank) = Incomplete
+    """
+    status_series = (
+        df.iloc[12:, status_col]
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
 
-    incomplete_mask = status_series.str.contains("pending|incomplete", regex=True)
-    complete_mask = status_series.str.contains("complete|completed", regex=True)
+    completed_mask = status_series.eq("completed")
+    incomplete_mask = ~completed_mask
 
-    incomplete_count = incomplete_mask.sum()
-    complete_count = complete_mask.sum()
+    incomplete_count = int(incomplete_mask.sum())
+    complete_count = int(completed_mask.sum())
 
     overall_status = "Incomplete" if incomplete_count > 0 else "Complete"
 
     return overall_status, incomplete_count, complete_count
 
-
 # --------------------------------------------------
-# MAIN AGGREGATION
+# AGGREGATION
 # --------------------------------------------------
 rows = []
 
@@ -89,8 +98,8 @@ with st.spinner("Fetching latest data from Google Sheets..."):
             rows.append({
                 "Officer Name": officer,
                 "Overall Status": overall,
-                "No. of Tasks Incomplete": int(incomplete),
-                "No. of Tasks Completed": int(complete),
+                "No. of Tasks Incomplete": incomplete,
+                "No. of Tasks Completed": complete,
             })
         except Exception as e:
             rows.append({
@@ -108,7 +117,7 @@ summary_df = pd.DataFrame(rows)
 col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.subheader("📋 Officer-wise Weekly Status (Latest Week)")
+    st.subheader("📋 Officer-wise Status (Latest Week Only)")
     st.dataframe(summary_df, use_container_width=True)
 
 with col2:
@@ -118,6 +127,7 @@ with col2:
 
 st.markdown("---")
 st.info(
-    "Logic used: For each officer sheet, the **rightmost Status column** is treated as the latest week. "
-    "If **any task is Pending/Incomplete**, the officer's overall status is marked **Incomplete**."
+    "Rule applied: ONLY exact 'completed' is treated as completed. "
+    "Pending / Incomplete / Not completed / Blank → Incomplete. "
+    "Latest week is detected by the rightmost Status column."
 )
