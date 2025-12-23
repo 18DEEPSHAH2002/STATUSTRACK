@@ -48,33 +48,31 @@ def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
     url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
     return pd.read_csv(url, header=None)
 
-
 def find_latest_status_column(df: pd.DataFrame) -> int:
     """
-    Detect latest WEEK first, then find its Status column.
+    Find the latest usable Status column.
+    Works with merged week headers & CSV export.
     """
 
-    week_rows = []
+    status_cols = []
 
-    # Step 1: find rows containing week/date range
-    for i in range(15):
-        row_text = " ".join(df.iloc[i].astype(str)).lower()
-        if any(m in row_text for m in ["jan", "feb", "mar", "apr", "may", "jun",
-                                       "jul", "aug", "sep", "oct", "nov", "dec"]):
-            week_rows.append(i)
-
-    if not week_rows:
-        raise ValueError("No Week header found")
-
-    latest_week_row = max(week_rows)
-
-    # Step 2: find "Status" column BELOW the latest week row
     for col in range(df.shape[1]):
-        cell = str(df.iloc[latest_week_row + 1, col]).lower()
-        if "status" in cell:
+        # Scan top 15 rows for 'Status'
+        header_scan = df.iloc[:15, col].astype(str).str.lower()
+        if header_scan.str.contains("^status$", regex=True).any():
+            status_cols.append(col)
+
+    if not status_cols:
+        raise ValueError("No Status column found")
+
+    # Choose the rightmost Status column that has ANY data below header
+    for col in reversed(status_cols):
+        data_below = df.iloc[15:, col].astype(str).str.strip()
+        if data_below.replace("", pd.NA).dropna().shape[0] > 0:
             return col
 
-    raise ValueError("Status column not found for latest week")
+    # Fallback: last Status column
+    return max(status_cols)
 
 
 
