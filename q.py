@@ -66,8 +66,7 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     - A row is a task if ANY column in first 5 columns has Sr. No.
     - completed → Completed
-    - pending → Incomplete
-    - blank → skipped
+    - anything else (pending, blank, not completed, etc.) → Incomplete
     """
 
     # 🔍 Detect task rows by scanning first 5 columns for Sr. No.
@@ -79,25 +78,21 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     task_rows = df[sr_no_mask]
 
-    status_series = (
-        task_rows.iloc[:, status_col]
-        .astype(str)
-        .str.strip()
-        .str.lower()
-    )
+    status_series = task_rows.iloc[:, status_col].astype(str).str.strip().str.lower()
 
+    # Only exact 'completed' is counted as completed
     completed_count = (status_series == "completed").sum()
-    pending_count = (status_series == "pending").sum()
+    # Anything not 'completed' and not empty is considered incomplete
+    incomplete_count = ((status_series != "completed") & (status_series != "nan") & (status_series != "")).sum()
 
-    if pending_count > 0:
+    if incomplete_count > 0:
         overall_status = "Incomplete"
     elif completed_count > 0:
         overall_status = "Complete"
     else:
         overall_status = "No Update"
 
-    return overall_status, int(pending_count), int(completed_count)
-
+    return overall_status, int(incomplete_count), int(completed_count)
 
 
 # --------------------------------------------------
@@ -145,6 +140,6 @@ with col2:
 st.markdown("---")
 st.info(
     "Rule applied: ONLY exact 'completed' is treated as completed. "
-    "Pending / Incomplete / Not completed / Blank → Incomplete. "
+    "Anything else (pending / not completed / blank) → Incomplete. "
     "Latest week is detected by the rightmost Status column."
 )
