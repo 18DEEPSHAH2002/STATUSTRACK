@@ -62,16 +62,22 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
 
 def summarize_status(df: pd.DataFrame, status_col: int):
     """
-    FINAL VERIFIED LOGIC (Based on your sheet structure):
+    FINAL VERIFIED LOGIC (CMFO-safe):
 
-    - A row is counted ONLY if 'Sr. No.' (column 0) is present
+    - A row is a task if ANY column in first 5 columns has Sr. No.
     - completed → Completed
     - pending → Incomplete
     - blank → skipped
     """
 
-    # ✅ Keep ONLY rows where Sr. No. exists (real tasks)
-    task_rows = df[pd.to_numeric(df.iloc[:, 0], errors="coerce").notna()]
+    # 🔍 Detect task rows by scanning first 5 columns for Sr. No.
+    sr_no_mask = (
+        df.iloc[:, :5]
+        .apply(lambda col: pd.to_numeric(col, errors="coerce").notna())
+        .any(axis=1)
+    )
+
+    task_rows = df[sr_no_mask]
 
     status_series = (
         task_rows.iloc[:, status_col]
@@ -91,6 +97,7 @@ def summarize_status(df: pd.DataFrame, status_col: int):
         overall_status = "No Update"
 
     return overall_status, int(pending_count), int(completed_count)
+
 
 
 # --------------------------------------------------
