@@ -4,6 +4,7 @@
 
 import streamlit as st
 import pandas as pd
+import re
 
 st.set_page_config(page_title="Officer Task Status Dashboard", layout="wide")
 
@@ -60,13 +61,24 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
     return max(status_cols)
 
 
+def clean_status(cell_value: str) -> str:
+    """
+    Remove all invisible characters (spaces, non-breaking, zero-width) and lowercase.
+    """
+    if pd.isna(cell_value):
+        return ""
+    # Remove all whitespace characters
+    cleaned = re.sub(r'\s+', '', str(cell_value))
+    return cleaned.lower()
+
+
 def summarize_status(df: pd.DataFrame, status_col: int):
     """
     FINAL VERIFIED LOGIC (CMFO-safe):
 
     - A row is a task if ANY column in first 5 columns has Sr. No.
     - completed → Completed
-    - anything else (pending, blank, not completed, etc.) → Incomplete
+    - anything else (pending, dropdown values, blank) → Incomplete
     """
 
     # 🔍 Detect task rows by scanning first 5 columns for Sr. No.
@@ -78,12 +90,12 @@ def summarize_status(df: pd.DataFrame, status_col: int):
 
     task_rows = df[sr_no_mask]
 
-    status_series = task_rows.iloc[:, status_col].astype(str).str.strip().str.lower()
+    # Clean status values
+    status_series = task_rows.iloc[:, status_col].apply(clean_status)
 
-    # Only exact 'completed' is counted as completed
+    # Count completed vs incomplete
     completed_count = (status_series == "completed").sum()
-    # Anything not 'completed' and not empty is considered incomplete
-    incomplete_count = ((status_series != "completed") & (status_series != "nan") & (status_series != "")).sum()
+    incomplete_count = ((status_series != "completed") & (status_series != "")).sum()
 
     if incomplete_count > 0:
         overall_status = "Incomplete"
@@ -140,6 +152,6 @@ with col2:
 st.markdown("---")
 st.info(
     "Rule applied: ONLY exact 'completed' is treated as completed. "
-    "Anything else (pending / not completed / blank) → Incomplete. "
+    "Anything else (pending / dropdown / blank) → Incomplete. "
     "Latest week is detected by the rightmost Status column."
 )
