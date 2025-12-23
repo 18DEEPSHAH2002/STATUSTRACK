@@ -50,25 +50,32 @@ def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
 
 
 def find_latest_status_column(df: pd.DataFrame) -> int:
-    status_cols = []
+    """
+    Detect latest WEEK first, then find its Status column.
+    """
+
+    week_rows = []
+
+    # Step 1: find rows containing week/date range
+    for i in range(15):
+        row_text = " ".join(df.iloc[i].astype(str)).lower()
+        if any(m in row_text for m in ["jan", "feb", "mar", "apr", "may", "jun",
+                                       "jul", "aug", "sep", "oct", "nov", "dec"]):
+            week_rows.append(i)
+
+    if not week_rows:
+        raise ValueError("No Week header found")
+
+    latest_week_row = max(week_rows)
+
+    # Step 2: find "Status" column BELOW the latest week row
     for col in range(df.shape[1]):
-        header_scan = df.iloc[:15, col].astype(str).str.lower()
-        if header_scan.str.contains("status").any():
-            status_cols.append(col)
+        cell = str(df.iloc[latest_week_row + 1, col]).lower()
+        if "status" in cell:
+            return col
 
-    if not status_cols:
-        raise ValueError("No Status column found")
+    raise ValueError("Status column not found for latest week")
 
-    return max(status_cols)
-
-
-def clean_status(value: str) -> str:
-    if pd.isna(value):
-        return ""
-
-    s = unicodedata.normalize("NFKD", str(value))
-    s = "".join(ch for ch in s if ch.isalnum())
-    return s.lower()
 
 
 def summarize_status(df: pd.DataFrame, status_col: int):
