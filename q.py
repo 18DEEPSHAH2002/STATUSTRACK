@@ -46,16 +46,33 @@ def clean_status(value):
     return s.lower()
 
 
-def summarize_status(df):
-    # ✅ LATEST WEEK STATUS = LAST COLUMN
-    status_col = df.shape[1] - 1
+def find_latest_status_column(df: pd.DataFrame) -> int:
+    """
+    Find the rightmost column that actually contains
+    'pending' or 'completed' values.
+    """
+    for col in range(df.shape[1] - 1, -1, -1):
+        col_values = (
+            df.iloc[:, col]
+            .astype(str)
+            .apply(clean_status)
+        )
+        if col_values.isin(["pending", "completed"]).any():
+            return col
 
-    # Weekly Target column (contains real task text)
-    task_col_index = 1
+    raise ValueError("No valid Status column found")
+
+
+def summarize_status(df: pd.DataFrame):
+
+    # ✅ Find TRUE latest week status column
+    status_col = find_latest_status_column(df)
+
+    task_col_index = 1  # Weekly Target / Subject column
 
     task_text = df.iloc[:, task_col_index].astype(str).str.strip()
 
-    # ✅ Ignore empty rows & Done/Total summary
+    # Ignore empty + summary rows
     task_mask = (
         task_text.ne("") &
         (~task_text.str.lower().isin(["done/total"]))
