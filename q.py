@@ -111,10 +111,6 @@ with col1:
     st.subheader("📋 Officer-wise Weekly Status (Latest Week)")
     st.dataframe(summary_df, use_container_width=True)
 
-with col2:
-    st.subheader("📈 Incomplete Tasks by Officer")
-    chart_df = summary_df.dropna(subset=["No. of Tasks Incomplete"])
-    st.bar_chart(chart_df.set_index("Officer Name")["No. of Tasks Incomplete"])
 
 st.markdown("---")
 st.info(
