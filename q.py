@@ -1,15 +1,14 @@
 # app.py
-# Streamlit Master Dashboard + Star-Mark Summary Table
+# Streamlit Master Dashboard + Star-Mark Summary (FIXED)
 
 import streamlit as st
 import pandas as pd
-import re
 from datetime import datetime, timedelta
 
 st.set_page_config(page_title="Officer Task Status Dashboard", layout="wide")
 
 st.title("📊 Master Dashboard – Officer Task Status")
-st.caption("Weekly status from officer sheets + Star-mark task summary")
+st.caption("Weekly officer status + Star-mark task summary")
 
 # --------------------------------------------------
 # CONFIGURATION – OFFICER WEEKLY SHEETS
@@ -34,7 +33,7 @@ OFFICER_SHEETS = {
 }
 
 # --------------------------------------------------
-# STAR MARK SHEET CONFIG
+# STAR MARK SHEET (PUBLIC CSV)
 # --------------------------------------------------
 STAR_MARK_SHEET_URL = (
     "https://docs.google.com/spreadsheets/d/"
@@ -55,6 +54,8 @@ def find_latest_status_column(df: pd.DataFrame) -> int:
         col_values = df.iloc[:10, col].astype(str).str.lower()
         if col_values.str.contains("status").any():
             status_cols.append(col)
+    if not status_cols:
+        raise ValueError("No Status column found")
     return max(status_cols)
 
 def summarize_status(df: pd.DataFrame, status_col: int):
@@ -65,56 +66,78 @@ def summarize_status(df: pd.DataFrame, status_col: int):
     return overall, incomplete, complete
 
 # --------------------------------------------------
+# HELPER – AUTO FIND DATE COLUMN (STAR MARK FIX)
+# --------------------------------------------------
+def find_date_column(df: pd.DataFrame) -> str:
+    for col in df.columns:
+        if "date" in col.lower():
+            return col
+    raise ValueError("No Date column found in Star Mark sheet")
+
+# --------------------------------------------------
 # LOAD WEEKLY OFFICER DATA
 # --------------------------------------------------
-rows = []
+weekly_rows = []
 
 with st.spinner("Fetching latest weekly officer data..."):
     for officer, (sid, gid) in OFFICER_SHEETS.items():
         try:
             df = load_sheet_csv(sid, gid)
-            col = find_latest_status_column(df)
-            overall, inc, comp = summarize_status(df, col)
-            rows.append({
+            status_col = find_latest_status_column(df)
+            overall, inc, comp = summarize_status(df, status_col)
+
+            weekly_rows.append({
                 "Officer Name": officer,
                 "Overall Status": overall,
                 "No. of Tasks Incomplete": inc,
-                "No. of Tasks Completed": comp
+                "No. of Tasks Completed": comp,
             })
-        except:
-            rows.append({
+        except Exception:
+            weekly_rows.append({
                 "Officer Name": officer,
                 "Overall Status": "Error",
                 "No. of Tasks Incomplete": None,
-                "No. of Tasks Completed": None
+                "No. of Tasks Completed": None,
             })
 
-weekly_df = pd.DataFrame(rows)
+weekly_df = pd.DataFrame(weekly_rows)
 
 # --------------------------------------------------
-# LOAD STAR MARK DATA
+# LOAD STAR MARK DATA (FIXED & SAFE)
 # --------------------------------------------------
 star_df = pd.read_csv(STAR_MARK_SHEET_URL)
-
 star_df.columns = star_df.columns.str.strip()
-star_df["Date"] = pd.to_datetime(star_df["Date"], dayfirst=True, errors="coerce")
+
+date_col = find_date_column(star_df)
+
+star_df[date_col] = pd.to_datetime(
+    star_df[date_col],
+    dayfirst=True,
+    errors="coerce"
+)
+
 star_df["Status"] = star_df["Status"].astype(str).str.lower()
+star_df["Marked to Officer"] = star_df["Marked to Officer"].astype(str).str.strip()
 
 last_7_days = datetime.now() - timedelta(days=7)
 
 completed_7 = star_df[
     (star_df["Status"] == "completed") &
-    (star_df["Date"] >= last_7_days)
+    (star_df[date_col] >= last_7_days)
 ]
 
-completed_summary = completed_7.groupby("Marked to Officer").size().reset_index(
-    name="Completed (Last 7 Days)"
+completed_summary = (
+    completed_7
+    .groupby("Marked to Officer")
+    .size()
+    .reset_index(name="Completed (Last 7 Days)")
 )
 
-pending_summary = star_df[
-    star_df["Status"] != "completed"
-].groupby("Marked to Officer").size().reset_index(
-    name="Pending Tasks"
+pending_summary = (
+    star_df[star_df["Status"] != "completed"]
+    .groupby("Marked to Officer")
+    .size()
+    .reset_index(name="Pending Tasks")
 )
 
 star_summary = pd.merge(
@@ -139,6 +162,6 @@ with col2:
 
 st.markdown("---")
 st.info(
-    "Left table shows **latest weekly status** from individual officer sheets. "
-    "Right table shows **Star-mark task performance** (completed in last 7 days & pending)."
+    "Left table shows **latest weekly status** from officer sheets. "
+    "Right table shows **Star-mark tasks** (Completed in last 7 days & Pending)."
 )
