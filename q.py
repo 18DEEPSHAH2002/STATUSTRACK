@@ -179,6 +179,14 @@ court_df["Upcoming Hearing Date"] = pd.to_datetime(
     errors="coerce"
 )
 
+today = pd.Timestamp.today().normalize()
+
+court_df = court_df[
+    court_df["Upcoming Hearing Date"].notna() &
+    (court_df["Upcoming Hearing Date"] >= today)
+]
+
+
 court_df = court_df.sort_values("Upcoming Hearing Date")
 
 
