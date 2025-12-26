@@ -157,16 +157,21 @@ star_summary = pd.merge(
 ).fillna(0)
 
 # --------------------------------------------------
-# LOAD UPCOMING COURT CASES DATA (NO LOGIC CHANGE)
+# LOAD UPCOMING COURT CASES DATA (FIXED COLUMN MAPPING)
 # --------------------------------------------------
 court_df = pd.read_csv(COURT_CASE_SHEET_URL)
 court_df.columns = court_df.columns.str.strip()
 
 court_df = court_df[[
-    "Name of the Officer",
-    "Upcoming Hearing Date",
+    "Supervisor Name",
+    "Next Hearing",
     "Name of the Court",
 ]]
+
+court_df = court_df.rename(columns={
+    "Supervisor Name": "Name of the Officer",
+    "Next Hearing": "Upcoming Hearing Date",
+})
 
 court_df["Upcoming Hearing Date"] = pd.to_datetime(
     court_df["Upcoming Hearing Date"],
@@ -175,6 +180,7 @@ court_df["Upcoming Hearing Date"] = pd.to_datetime(
 )
 
 court_df = court_df.sort_values("Upcoming Hearing Date")
+
 
 # --------------------------------------------------
 # DASHBOARD UI
