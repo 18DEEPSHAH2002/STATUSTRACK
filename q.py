@@ -42,6 +42,15 @@ STAR_MARK_SHEET_URL = (
 )
 
 # --------------------------------------------------
+# UPCOMING COURT CASES SHEET (PUBLIC CSV)
+# --------------------------------------------------
+COURT_CASE_SHEET_URL = (
+    "https://docs.google.com/spreadsheets/d/"
+    "1VUnD7ySFzIkeZlaq8E5XG8r2xXcos6lhIt62QZEeHKs/"
+    "export?format=csv&gid=0"
+)
+
+# --------------------------------------------------
 # HELPERS – WEEKLY STATUS
 # --------------------------------------------------
 def load_sheet_csv(spreadsheet_id: str, gid: str) -> pd.DataFrame:
@@ -148,7 +157,27 @@ star_summary = pd.merge(
 ).fillna(0)
 
 # --------------------------------------------------
-# DASHBOARD UI (SIDE-BY-SIDE TABLES)
+# LOAD UPCOMING COURT CASES DATA (NO LOGIC CHANGE)
+# --------------------------------------------------
+court_df = pd.read_csv(COURT_CASE_SHEET_URL)
+court_df.columns = court_df.columns.str.strip()
+
+court_df = court_df[[
+    "Name of the Officer",
+    "Upcoming Hearing Date",
+    "Name of the Court",
+]]
+
+court_df["Upcoming Hearing Date"] = pd.to_datetime(
+    court_df["Upcoming Hearing Date"],
+    dayfirst=True,
+    errors="coerce"
+)
+
+court_df = court_df.sort_values("Upcoming Hearing Date")
+
+# --------------------------------------------------
+# DASHBOARD UI
 # --------------------------------------------------
 col1, col2 = st.columns([2, 2])
 
@@ -161,7 +190,11 @@ with col2:
     st.dataframe(star_summary, use_container_width=True)
 
 st.markdown("---")
+
+st.subheader("⚖️ Upcoming Court Cases")
+st.dataframe(court_df, use_container_width=True)
+
 st.info(
-    "Left table shows **latest weekly status** from officer sheets. "
-    "Right table shows **Star-mark tasks** (Completed in last 7 days & Pending)."
+    "Top tables show **weekly status** and **Star-mark summary**. "
+    "The bottom table lists **upcoming court cases** with officer, hearing date, and court name."
 )
