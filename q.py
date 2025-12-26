@@ -157,20 +157,20 @@ star_summary = pd.merge(
 ).fillna(0)
 
 # --------------------------------------------------
-# LOAD UPCOMING COURT CASES DATA (FIXED COLUMN MAPPING)
+# LOAD UPCOMING COURT CASES DATA (EXACT COLUMN MATCH)
 # --------------------------------------------------
 court_df = pd.read_csv(COURT_CASE_SHEET_URL)
 court_df.columns = court_df.columns.str.strip()
 
 court_df = court_df[[
-    "Supervisor Name",
-    "Next Hearing",
-    "Name of the Court",
+    "Supervisior office",
+    "Next Hearing Date",
+    "Name of Court (Supreme Court / High Court / Civil Court",
 ]]
 
 court_df = court_df.rename(columns={
-    "Supervisor Name": "Name of the Officer",
-    "Next Hearing": "Upcoming Hearing Date",
+    "Supervisior office": "Name of the Officer",
+    "Next Hearing Date": "Upcoming Hearing Date",
 })
 
 court_df["Upcoming Hearing Date"] = pd.to_datetime(
