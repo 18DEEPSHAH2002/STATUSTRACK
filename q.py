@@ -75,13 +75,13 @@ def summarize_status(df: pd.DataFrame, status_col: int):
     return overall, incomplete, complete
 
 # --------------------------------------------------
-# HELPER – AUTO FIND DATE COLUMN (STAR MARK FIX)
+# HELPER – AUTO FIND DATE COLUMN (STAR MARK)
 # --------------------------------------------------
 def find_date_column(df: pd.DataFrame) -> str:
     for col in df.columns:
         if "date" in col.lower():
             return col
-    raise ValueError("No Date column found in Star Mark sheet")
+    raise ValueError("No Date column found")
 
 # --------------------------------------------------
 # LOAD WEEKLY OFFICER DATA
@@ -112,19 +112,14 @@ with st.spinner("Fetching latest weekly officer data..."):
 weekly_df = pd.DataFrame(weekly_rows)
 
 # --------------------------------------------------
-# LOAD STAR MARK DATA (FIXED & SAFE)
+# LOAD STAR MARK DATA
 # --------------------------------------------------
 star_df = pd.read_csv(STAR_MARK_SHEET_URL)
 star_df.columns = star_df.columns.str.strip()
 
 date_col = find_date_column(star_df)
 
-star_df[date_col] = pd.to_datetime(
-    star_df[date_col],
-    dayfirst=True,
-    errors="coerce"
-)
-
+star_df[date_col] = pd.to_datetime(star_df[date_col], dayfirst=True, errors="coerce")
 star_df["Status"] = star_df["Status"].astype(str).str.lower()
 star_df["Marked to Officer"] = star_df["Marked to Officer"].astype(str).str.strip()
 
@@ -136,8 +131,7 @@ completed_7 = star_df[
 ]
 
 completed_summary = (
-    completed_7
-    .groupby("Marked to Officer")
+    completed_7.groupby("Marked to Officer")
     .size()
     .reset_index(name="Completed (Last 7 Days)")
 )
@@ -157,16 +151,18 @@ star_summary = pd.merge(
 ).fillna(0)
 
 # --------------------------------------------------
-# LOAD UPCOMING COURT CASES DATA (EXACT COLUMN MATCH)
+# LOAD UPCOMING COURT CASES DATA
 # --------------------------------------------------
 court_df = pd.read_csv(COURT_CASE_SHEET_URL)
 court_df.columns = court_df.columns.str.strip()
 
-court_df = court_df[[
-    "Supervisior office",
-    "Next Hearing Date",
-    "Name of Court (Supreme Court / High Court / Civil Court",
-]]
+court_df = court_df[
+    [
+        "Supervisior office",
+        "Next Hearing Date",
+        "Name of Court (Supreme Court / High Court / Civil Court",
+    ]
+]
 
 court_df = court_df.rename(columns={
     "Supervisior office": "Name of the Officer",
@@ -186,9 +182,10 @@ court_df = court_df[
     (court_df["Upcoming Hearing Date"] >= today)
 ]
 
-
 court_df = court_df.sort_values("Upcoming Hearing Date")
 
+# ✅ REMOVE 00:00:00 TIMESTAMP (DATE ONLY DISPLAY)
+court_df["Upcoming Hearing Date"] = court_df["Upcoming Hearing Date"].dt.date
 
 # --------------------------------------------------
 # DASHBOARD UI
@@ -210,5 +207,5 @@ st.dataframe(court_df, use_container_width=True)
 
 st.info(
     "Top tables show **weekly status** and **Star-mark summary**. "
-    "The bottom table lists **upcoming court cases** with officer, hearing date, and court name."
+    "Bottom table shows **upcoming court hearings (date only, no timestamps)**."
 )
